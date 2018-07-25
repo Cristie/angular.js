@@ -19,9 +19,12 @@ describe('angular', function() {
   describe('case', function() {
     it('should change case', function() {
       expect(lowercase('ABC90')).toEqual('abc90');
-      expect(manualLowercase('ABC90')).toEqual('abc90');
       expect(uppercase('abc90')).toEqual('ABC90');
-      expect(manualUppercase('abc90')).toEqual('ABC90');
+    });
+
+    it('should change case of non-ASCII letters', function() {
+      expect(lowercase('Ω')).toEqual('ω');
+      expect(uppercase('ω')).toEqual('Ω');
     });
   });
 
@@ -1035,10 +1038,13 @@ describe('angular', function() {
 
     }
 
-    var originalFunction;
+    var originalPrototype = window.Function.prototype;
 
     beforeEach(function() {
       spyOn(window, 'Function');
+      // Jasmine 2.7+ doesn't support spying on Function, so we have restore the prototype
+      // as Jasmine will use Function internally
+      window.Function.prototype = originalPrototype;
     });
 
     afterEach(function() {
@@ -1249,6 +1255,37 @@ describe('angular', function() {
       expect(toKeyValue({key: [323,'value',true, 1234]})).
       toEqual('key=323&key=value&key&key=1234');
     });
+  });
+
+  describe('isArray', function() {
+
+    it('should return true if passed an `Array`', function() {
+      expect(isArray([])).toBe(true);
+    });
+
+    it('should return true if passed an `Array` from a different window context', function() {
+      var iframe = document.createElement('iframe');
+      document.body.appendChild(iframe);  // No `contentWindow` if not attached to the DOM.
+      var arr = new iframe.contentWindow.Array();
+      document.body.removeChild(iframe);  // Clean up.
+
+      expect(arr instanceof Array).toBe(false);
+      expect(isArray(arr)).toBe(true);
+    });
+
+    it('should return true if passed an object prototypically inherited from `Array`', function() {
+      function FooArray() {}
+      FooArray.prototype = [];
+
+      expect(isArray(new FooArray())).toBe(true);
+    });
+
+    it('should return false if passed non-array objects', function() {
+      expect(isArray(document.body.childNodes)).toBe(false);
+      expect(isArray({length: 0})).toBe(false);
+      expect(isArray({length: 2, 0: 'one', 1: 'two'})).toBe(false);
+    });
+
   });
 
   describe('isArrayLike', function() {
@@ -1748,21 +1785,9 @@ describe('angular', function() {
             protocol = 'browserext:';  // Upcoming standard scheme.
           }
 
-
-          if (protocol === 'ms-browser-extension:') {
-            // Support: Edge 13-15
-            // In Edge, URLs with protocol 'ms-browser-extension:' return "null" for the origin,
-            // therefore it's impossible to know if a script is same-origin.
-            it('should not bootstrap for same-origin documents', function() {
-              expect(allowAutoBootstrap(createFakeDoc({src: protocol + '//something'}, protocol))).toBe(false);
-            });
-
-          } else {
-            it('should bootstrap for same-origin documents', function() {
-
-              expect(allowAutoBootstrap(createFakeDoc({src: protocol + '//something'}, protocol))).toBe(true);
-            });
-          }
+          it('should bootstrap for same-origin documents', function() {
+            expect(allowAutoBootstrap(createFakeDoc({src: protocol + '//something'}, protocol))).toBe(true);
+          });
 
           it('should not bootstrap for cross-origin documents', function() {
             expect(allowAutoBootstrap(createFakeDoc({src: protocol + '//something-else'}, protocol))).toBe(false);

@@ -2,8 +2,23 @@
 
 set -e
 
-export BROWSER_STACK_ACCESS_KEY=`echo $BROWSER_STACK_ACCESS_KEY | rev`
-export SAUCE_ACCESS_KEY=`echo $SAUCE_ACCESS_KEY | rev`
+readonly THIS_DIR=$(cd $(dirname ${BASH_SOURCE[0]}); pwd)
+readonly ROOT_DIR="$THIS_DIR/../.."
+
+export BROWSER_STACK_ACCESS_KEY
+export SAUCE_ACCESS_KEY
+
+BROWSER_STACK_ACCESS_KEY=$(echo "$BROWSER_STACK_ACCESS_KEY" | rev)
+SAUCE_ACCESS_KEY=$(echo "$SAUCE_ACCESS_KEY" | rev)
+
+# TODO: restore "SL_EDGE-1" once Sauce Labs adds Edge 17 and "SL_EDGE-1" refers
+# to version 16. Edge 15 disconnects from Karma frequently causing extreme build instability.
+BROWSERS="SL_Chrome,SL_Chrome-1,\
+SL_Firefox,SL_Firefox-1,\
+SL_Safari,SL_Safari-1,\
+SL_iOS_10,SL_iOS_11,\
+SL_IE_9,SL_IE_10,SL_IE_11,\
+SL_EDGE"
 
 case "$JOB" in
   "ci-checks")
@@ -17,18 +32,18 @@ case "$JOB" in
       yarn run commitplease -- "${TRAVIS_COMMIT_RANGE/.../..}"
     fi
     ;;
-  "unit")
-    if [[ "$BROWSER_PROVIDER" == "browserstack" ]]; then
-      BROWSERS="BS_Chrome,BS_Safari,BS_Firefox,BS_IE_9,BS_IE_10,BS_IE_11,BS_EDGE,BS_iOS_8,BS_iOS_9"
-    else
-      BROWSERS="SL_Chrome,SL_Chrome-1,SL_Firefox,SL_Firefox-1,SL_Safari_8,SL_Safari_9,SL_IE_9,SL_IE_10,SL_IE_11,SL_EDGE,SL_EDGE-1,SL_iOS"
-    fi
-
+  "unit-core")
     grunt test:promises-aplus
-    grunt test:unit --browsers="$BROWSERS" --reporters=spec
-    grunt tests:docs --browsers="$BROWSERS" --reporters=spec
+    grunt test:jqlite --browsers="$BROWSERS" --reporters=spec
+    grunt test:modules --browsers="$BROWSERS" --reporters=spec
     ;;
-  "docs-e2e")
+  "unit-jquery")
+    grunt test:jquery --browsers="$BROWSERS" --reporters=spec
+    grunt test:jquery-2.2 --browsers="$BROWSERS" --reporters=spec
+    grunt test:jquery-2.1 --browsers="$BROWSERS" --reporters=spec
+    ;;
+  "docs-app")
+    grunt tests:docs --browsers="$BROWSERS" --reporters=spec
     grunt test:travis-protractor --specs="docs/app/e2e/**/*.scenario.js"
     ;;
   "e2e")
@@ -36,13 +51,13 @@ case "$JOB" in
       export USE_JQUERY=1
     fi
 
-    export TARGET_SPECS="build/docs/ptore2e/**/default_test.js"
-
     if [[ "$TEST_TARGET" == jquery* ]]; then
       TARGET_SPECS="build/docs/ptore2e/**/jquery_test.js"
+    else
+      TARGET_SPECS="build/docs/ptore2e/**/default_test.js"
     fi
 
-    export TARGET_SPECS="test/e2e/tests/**/*.js,$TARGET_SPECS"
+    TARGET_SPECS="test/e2e/tests/**/*.js,$TARGET_SPECS"
     grunt test:travis-protractor --specs="$TARGET_SPECS"
     ;;
   "deploy")
@@ -54,6 +69,8 @@ case "$JOB" in
     # upload docs if the branch distTag from package.json is "latest" (i.e. stable branch)
     if [[ "$DIST_TAG" == latest ]]; then
       DEPLOY_DOCS=true
+    else
+      DEPLOY_DOCS=false
     fi
 
     # upload the build (code + docs) if ...
@@ -62,15 +79,32 @@ case "$JOB" in
     #   - or the branch distTag from package.json is "latest" (i.e. stable branch)
     if [[ "$TRAVIS_TAG" != '' || "$TRAVIS_BRANCH" == master || "$DIST_TAG" == latest ]]; then
       DEPLOY_CODE=true
+    else
+      DEPLOY_CODE=false
     fi
 
-    if [[ "$DEPLOY_DOCS" || "$DEPLOY_CODE" ]]; then
-      grunt prepareFirebaseDeploy
+    if [[ "$DEPLOY_DOCS" == true || "$DEPLOY_CODE" == true ]]; then
+      grunt prepareDeploy
+
+      if [[ "$DEPLOY_DOCS" == true ]]; then
+        # Install npm dependencies for Firebase functions.
+        (
+          cd "$ROOT_DIR/scripts/docs.angularjs.org-firebase/functions"
+          npm install
+        )
+      fi
     else
       echo "Skipping deployment build because conditions have not been met."
     fi
     ;;
   *)
-    echo "Unknown job type. Please set JOB=ci-checks, JOB=unit, JOB=deploy or JOB=e2e-*."
+    echo "Unknown job type. Please set JOB to one of\
+      'ci-checks',\
+      'unit-core',\
+      'unit-jquery',\
+      'docs-app',\
+      'e2e',\
+      or\
+      'deploy'."
     ;;
 esac

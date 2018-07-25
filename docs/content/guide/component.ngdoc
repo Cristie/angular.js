@@ -25,7 +25,7 @@ When not to use Components:
 
 ## Creating and configuring a Component
 
-Components can be registered using the `.component()` method of an AngularJS module (returned by {@link module `angular.module()`}). The method takes two arguments:
+Components can be registered using the {@link ng.$compileProvider#component `.component()`} method of an AngularJS module (returned by {@link module `angular.module()`}). The method takes two arguments:
 
   * The name of the Component (as string).
   * The Component config object. (Note that, unlike the `.directive()` method, this method does **not** take a factory function.)
@@ -143,7 +143,7 @@ components should follow a few simple conventions:
       }
     ```
 
-- **Components have a well-defined lifecycle**
+- **Components have a well-defined lifecycle:**
 Each component can implement "lifecycle hooks". These are methods that will be called at certain points in the life
 of the component. The following hook methods can be implemented:
 
@@ -445,7 +445,7 @@ angular.module('docsTabsExample', [])
 </example>
 
 
-# Unit-testing Component Controllers
+## Unit-testing Component Controllers
 
 The easiest way to unit-test a component controller is by using the
 {@link ngMock.$componentController $componentController} that is included in {@link ngMock}. The

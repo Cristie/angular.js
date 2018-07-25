@@ -127,8 +127,10 @@ var ngModelMinErr = minErr('ngModel');
  * };
  * ```
  *
- * @property {Array.<Function>} $viewChangeListeners Array of functions to execute whenever the
- *     view value has changed. It is called with no arguments, and its return value is ignored.
+ * @property {Array.<Function>} $viewChangeListeners Array of functions to execute whenever
+ *     a change to {@link ngModel.NgModelController#$viewValue `$viewValue`} has caused a change
+ *     to {@link ngModel.NgModelController#$modelValue `$modelValue`}.
+ *     It is called with no arguments, and its return value is ignored.
  *     This can be used in place of additional $watches against the model value.
  *
  * @property {Object} $error An object hash with all failing validator ids as keys.
@@ -270,6 +272,9 @@ function NgModelController($scope, $exceptionHandler, $attr, $element, $parse, $
   this.$name = $interpolate($attr.name || '', false)($scope);
   this.$$parentForm = nullFormCtrl;
   this.$options = defaultModelOptions;
+  this.$$updateEvents = '';
+  // Attach the correct context to the event handler function for updateOn
+  this.$$updateEventHandler = this.$$updateEventHandler.bind(this);
 
   this.$$parsedNgModel = $parse($attr.ngModel);
   this.$$parsedNgModelAssign = this.$$parsedNgModel.assign;
@@ -277,10 +282,12 @@ function NgModelController($scope, $exceptionHandler, $attr, $element, $parse, $
   this.$$ngModelSet = this.$$parsedNgModelAssign;
   this.$$pendingDebounce = null;
   this.$$parserValid = undefined;
+  this.$$parserName = 'parse';
 
   this.$$currentValidationRunId = 0;
 
   this.$$scope = $scope;
+  this.$$rootScope = $scope.$root;
   this.$$attr = $attr;
   this.$$element = $element;
   this.$$animate = $animate;
@@ -607,7 +614,8 @@ NgModelController.prototype = {
     processAsyncValidators();
 
     function processParseErrors() {
-      var errorKey = that.$$parserName || 'parse';
+      var errorKey = that.$$parserName;
+
       if (isUndefined(that.$$parserValid)) {
         setValidity(errorKey, null);
       } else {
@@ -619,6 +627,7 @@ NgModelController.prototype = {
             setValidity(name, null);
           });
         }
+
         // Set the parse error last, to prevent unsetting it, should a $validators key == parserName
         setValidity(errorKey, that.$$parserValid);
         return that.$$parserValid;
@@ -720,6 +729,10 @@ NgModelController.prototype = {
     var that = this;
 
     this.$$parserValid = isUndefined(modelValue) ? undefined : true;
+
+    // Reset any previous parse error
+    this.$setValidity(this.$$parserName, null);
+    this.$$parserName = 'parse';
 
     if (this.$$parserValid) {
       for (var i = 0; i < this.$parsers.length; i++) {
@@ -838,8 +851,12 @@ NgModelController.prototype = {
 
     if (isNumber(debounceDelay[trigger])) {
       debounceDelay = debounceDelay[trigger];
-    } else if (isNumber(debounceDelay['default'])) {
+    } else if (isNumber(debounceDelay['default']) &&
+      this.$options.getOption('updateOn').indexOf(trigger) === -1
+    ) {
       debounceDelay = debounceDelay['default'];
+    } else if (isNumber(debounceDelay['*'])) {
+      debounceDelay = debounceDelay['*'];
     }
 
     this.$$timeout.cancel(this.$$pendingDebounce);
@@ -848,7 +865,7 @@ NgModelController.prototype = {
       this.$$pendingDebounce = this.$$timeout(function() {
         that.$commitViewValue();
       }, debounceDelay);
-    } else if (this.$$scope.$root.$$phase) {
+    } else if (this.$$rootScope.$$phase) {
       this.$commitViewValue();
     } else {
       this.$$scope.$apply(function() {
@@ -873,11 +890,22 @@ NgModelController.prototype = {
    * See {@link ngModelOptions} for information about what options can be specified
    * and how model option inheritance works.
    *
+   * <div class="alert alert-warning">
+   * **Note:** this function only affects the options set on the `ngModelController`,
+   * and not the options on the {@link ngModelOptions} directive from which they might have been
+   * obtained initially.
+   * </div>
+   *
+   * <div class="alert alert-danger">
+   * **Note:** it is not possible to override the `getterSetter` option.
+   * </div>
+   *
    * @param {Object} options a hash of settings to override the previous options
    *
    */
   $overrideModelOptions: function(options) {
     this.$options = this.$options.createChild(options);
+    this.$$setUpdateOnEvents();
   },
 
   /**
@@ -1025,6 +1053,21 @@ NgModelController.prototype = {
     this.$modelValue = this.$$rawModelValue = modelValue;
     this.$$parserValid = undefined;
     this.$processModelValue();
+  },
+
+  $$setUpdateOnEvents: function() {
+    if (this.$$updateEvents) {
+      this.$$element.off(this.$$updateEvents, this.$$updateEventHandler);
+    }
+
+    this.$$updateEvents = this.$options.getOption('updateOn');
+    if (this.$$updateEvents) {
+      this.$$element.on(this.$$updateEvents, this.$$updateEventHandler);
+    }
+  },
+
+  $$updateEventHandler: function(ev) {
+    this.$$debounceViewValueCommit(ev && ev.type);
   }
 };
 
@@ -1316,11 +1359,7 @@ var ngModelDirective = ['$rootScope', function($rootScope) {
         },
         post: function ngModelPostLink(scope, element, attr, ctrls) {
           var modelCtrl = ctrls[0];
-          if (modelCtrl.$options.getOption('updateOn')) {
-            element.on(modelCtrl.$options.getOption('updateOn'), function(ev) {
-              modelCtrl.$$debounceViewValueCommit(ev && ev.type);
-            });
-          }
+          modelCtrl.$$setUpdateOnEvents();
 
           function setTouched() {
             modelCtrl.$setTouched();

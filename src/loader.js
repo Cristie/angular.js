@@ -328,7 +328,8 @@ function setupModuleLoader(window) {
            * @ngdoc method
            * @name angular.Module#component
            * @module ng
-           * @param {string} name Name of the component in camel-case (i.e. myComp which will match as my-comp)
+           * @param {string|Object} name Name of the component in camelCase (i.e. `myComp` which will match `<my-comp>`),
+           *    or an object map of components where the keys are the names and the values are the component definition objects.
            * @param {Object} options Component definition object (a simplified
            *    {@link ng.$compile#directive-definition-object directive definition object})
            *
@@ -344,7 +345,13 @@ function setupModuleLoader(window) {
            * @param {Function} configFn Execute this function on module load. Useful for service
            *    configuration.
            * @description
-           * Use this method to register work which needs to be performed on module loading.
+           * Use this method to configure services by injecting their
+           * {@link angular.Module#provider `providers`}, e.g. for adding routes to the
+           * {@link ngRoute.$routeProvider $routeProvider}.
+           *
+           * Note that you can only inject {@link angular.Module#provider `providers`} and
+           * {@link angular.Module#constant `constants`} into this function.
+           *
            * For more about how to configure services, see
            * {@link providers#provider-recipe Provider Recipe}.
            */

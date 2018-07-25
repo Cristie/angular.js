@@ -13,6 +13,8 @@ var semver = require('semver');
 var exec = require('shelljs').exec;
 var pkg = require(__dirname + '/package.json');
 
+var docsScriptFolder = 'scripts/docs.angularjs.org-firebase';
+
 // Node.js version checks
 if (!semver.satisfies(process.version, pkg.engines.node)) {
   reportOrFail('Invalid node version (' + process.version + '). ' +
@@ -162,7 +164,12 @@ module.exports = function(grunt) {
 
     clean: {
       build: ['build'],
-      tmp: ['tmp']
+      tmp: ['tmp'],
+      deploy: [
+        'deploy/docs',
+        'deploy/code',
+        docsScriptFolder + '/functions/html'
+      ]
     },
 
     eslint: {
@@ -173,6 +180,7 @@ module.exports = function(grunt) {
           'docs/**/*.js',
           'lib/**/*.js',
           'scripts/**/*.js',
+          '!scripts/*/*/node_modules/**',
           'src/**/*.js',
           'test/**/*.js',
           'i18n/**/*.js',
@@ -186,16 +194,6 @@ module.exports = function(grunt) {
     },
 
     build: {
-      scenario: {
-        dest: 'build/angular-scenario.js',
-        src: [
-          'bower_components/jquery/dist/jquery.js',
-          util.wrap([files['angularSrc'], files['angularScenario']], 'ngScenario/angular')
-        ],
-        styles: {
-          css: ['css/angular.css', 'css/angular-scenario.css']
-        }
-      },
       angular: {
         dest: 'build/angular.js',
         src: util.wrap([files['angularSrc']], 'angular'),
@@ -281,9 +279,7 @@ module.exports = function(grunt) {
       files: [
         'src/**/*.js',
         'test/**/*.js',
-        '!test/ngScenario/DescribeSpec.js',
         '!src/ng/directive/attrs.js', // legitimate xit here
-        '!src/ngScenario/**/*.js',
         '!test/helpers/privateMocks*.js'
       ],
       options: {
@@ -323,19 +319,44 @@ module.exports = function(grunt) {
           }
         ]
       },
+      deployFirebaseCode: {
+        files: [
+          // copy files that are not handled by compress
+          {
+            cwd: 'build',
+            src: '**/*.{zip,jpg,jpeg,png}',
+            dest: 'deploy/code/' + deployVersion + '/',
+            expand: true
+          }
+        ]
+      },
       deployFirebaseDocs: {
         files: [
           // The source files are needed by the embedded examples in the docs app.
           {
-            src: 'build/angular*.{js.map,min.js}',
-            dest: 'uploadDocs/',
+            src: ['build/angular*.{js,js.map,min.js}', 'build/sitemap.xml'],
+            dest: 'deploy/docs/',
             expand: true,
             flatten: true
           },
           {
             cwd: 'build/docs',
-            src: '**',
-            dest: 'uploadDocs/',
+            src: ['**', '!ptore2e/**', '!index*.html'],
+            dest: 'deploy/docs/',
+            expand: true
+          },
+          {
+            src: 'build/docs/index-production.html',
+            dest: 'deploy/docs/index.html'
+          },
+          {
+            src: 'build/docs/index-production.html',
+            dest: docsScriptFolder + '/functions/content/index.html'
+          },
+          {
+            cwd: 'build/docs',
+            src: 'partials/**',
+            dest: docsScriptFolder + '/functions/content',
             expand: true
           }
         ]
@@ -356,10 +377,11 @@ module.exports = function(grunt) {
         options: {
           mode: 'gzip'
         },
-        src: ['**'],
+        // Already compressed files should not be compressed again
+        src: ['**', '!**/*.{zip,png,jpeg,jpg}'],
         cwd: 'build',
         expand: true,
-        dest: 'uploadCode/' + deployVersion + '/'
+        dest: 'deploy/code/' + deployVersion + '/'
       }
     },
 
@@ -438,14 +460,12 @@ module.exports = function(grunt) {
     'shell:promises-aplus-tests'
   ]);
   grunt.registerTask('minify', [
-    'bower',
     'clean',
     'build',
     'minall'
   ]);
   grunt.registerTask('webserver', ['connect:devserver']);
   grunt.registerTask('package', [
-    'bower',
     'validate-angular-files',
     'clean',
     'buildall',
@@ -461,9 +481,11 @@ module.exports = function(grunt) {
     'merge-conflict',
     'eslint'
   ]);
-  grunt.registerTask('prepareFirebaseDeploy', [
+  grunt.registerTask('prepareDeploy', [
     'package',
     'compress:deployFirebaseCode',
+    'copy:deployFirebaseCode',
+    'firebaseDocsJsonForTravis',
     'copy:deployFirebaseDocs'
   ]);
   grunt.registerTask('default', ['package']);

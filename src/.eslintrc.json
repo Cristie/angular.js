@@ -28,8 +28,6 @@
     "REGEX_STRING_REGEXP" : false,
     "lowercase": false,
     "uppercase": false,
-    "manualLowercase": false,
-    "manualUppercase": false,
     "isArrayLike": false,
     "forEach": false,
     "forEachSorted": false,
@@ -79,6 +77,7 @@
     "toJsonReplacer": false,
     "toJson": false,
     "fromJson": false,
+    "addDateMinutes": false,
     "convertTimezoneToLocal": false,
     "timezoneToOffset": false,
     "startingTag": false,
@@ -161,6 +160,7 @@
     "urlResolve": false,
     "urlIsSameOrigin": false,
     "urlIsSameOriginAsBaseUrl": false,
+    "urlIsAllowedOriginFactory": false,
 
     /* ng/controller.js */
     "identifierForController": false,

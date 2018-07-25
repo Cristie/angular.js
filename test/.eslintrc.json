@@ -43,8 +43,6 @@
 
     "lowercase": false,
     "uppercase": false,
-    "manualLowercase": false,
-    "manualUppercase": false,
     "isArrayLike": false,
     "forEach": false,
     "reverseParams": false,
@@ -152,7 +150,8 @@
     /* urlUtils.js */
     "urlResolve": false,
     "urlIsSameOrigin": false,
-    "urlIsSameOriginAsBaseUrl": true,
+    "urlIsSameOriginAsBaseUrl": false,
+    "urlIsAllowedOriginFactory": false,
 
     /* karma */
     "dump": false,

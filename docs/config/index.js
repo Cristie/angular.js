@@ -22,6 +22,7 @@ module.exports = new Package('angularjs', [
 .factory(require('./services/deployments/debug'))
 .factory(require('./services/deployments/default'))
 .factory(require('./services/deployments/jquery'))
+.factory(require('./services/deployments/test'))
 .factory(require('./services/deployments/production'))
 
 .factory(require('./inline-tag-defs/type'))
@@ -31,6 +32,7 @@ module.exports = new Package('angularjs', [
 .processor(require('./processors/keywords'))
 .processor(require('./processors/pages-data'))
 .processor(require('./processors/versions-data'))
+.processor(require('./processors/sitemap'))
 
 
 .config(function(dgeni, log, readFilesProcessor, writeFilesProcessor) {
@@ -146,6 +148,7 @@ module.exports = new Package('angularjs', [
 
 .config(function(checkAnchorLinksProcessor) {
   checkAnchorLinksProcessor.base = '/';
+  checkAnchorLinksProcessor.errorOnUnmatchedLinks = true;
   // We are only interested in docs that have an area (i.e. they are pages)
   checkAnchorLinksProcessor.checkDoc = function(doc) { return doc.area; };
 })
@@ -156,12 +159,14 @@ module.exports = new Package('angularjs', [
   generateProtractorTestsProcessor,
   generateExamplesProcessor,
   debugDeployment, defaultDeployment,
-  jqueryDeployment, productionDeployment) {
+  jqueryDeployment, testDeployment,
+  productionDeployment) {
 
   generateIndexPagesProcessor.deployments = [
     debugDeployment,
     defaultDeployment,
     jqueryDeployment,
+    testDeployment,
     productionDeployment
   ];
 

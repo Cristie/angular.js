@@ -87,7 +87,7 @@
  *  </file>
  * </example>
  */
-var ngAnimateSwapDirective = ['$animate', '$rootScope', function($animate, $rootScope) {
+var ngAnimateSwapDirective = ['$animate', function($animate) {
   return {
     restrict: 'A',
     transclude: 'element',
@@ -104,10 +104,10 @@ var ngAnimateSwapDirective = ['$animate', '$rootScope', function($animate, $root
           previousScope = null;
         }
         if (value || value === 0) {
-          previousScope = scope.$new();
-          $transclude(previousScope, function(element) {
-            previousElement = element;
-            $animate.enter(element, null, $element);
+          $transclude(function(clone, childScope) {
+            previousElement = clone;
+            previousScope = childScope;
+            $animate.enter(clone, null, $element);
           });
         }
       });

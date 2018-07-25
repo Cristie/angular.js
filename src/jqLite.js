@@ -54,7 +54,8 @@
  *
  * - [`addClass()`](http://api.jquery.com/addClass/) - Does not support a function as first argument
  * - [`after()`](http://api.jquery.com/after/)
- * - [`append()`](http://api.jquery.com/append/)
+ * - [`append()`](http://api.jquery.com/append/) - Contrary to jQuery, this doesn't clone elements
+ *   so will not work correctly when invoked on a jqLite object containing more than one DOM node
  * - [`attr()`](http://api.jquery.com/attr/) - Does not support functions as parameters
  * - [`bind()`](http://api.jquery.com/bind/) (_deprecated_, use [`on()`](http://api.jquery.com/on/)) - Does not support namespaces, selectors or eventData
  * - [`children()`](http://api.jquery.com/children/) - Does not support selectors
@@ -310,6 +311,28 @@ function jqLiteDealoc(element, onlyDescendants) {
   }
 }
 
+function isEmptyObject(obj) {
+  var name;
+
+  for (name in obj) {
+    return false;
+  }
+  return true;
+}
+
+function removeIfEmptyData(element) {
+  var expandoId = element.ng339;
+  var expandoStore = expandoId && jqCache[expandoId];
+
+  var events = expandoStore && expandoStore.events;
+  var data = expandoStore && expandoStore.data;
+
+  if ((!data || isEmptyObject(data)) && (!events || isEmptyObject(events))) {
+    delete jqCache[expandoId];
+    element.ng339 = undefined; // don't delete DOM expandos. IE and Chrome don't like it
+  }
+}
+
 function jqLiteOff(element, type, fn, unsupported) {
   if (isDefined(unsupported)) throw jqLiteMinErr('offargs', 'jqLite#off() does not support the `selector` argument');
 
@@ -346,6 +369,8 @@ function jqLiteOff(element, type, fn, unsupported) {
       }
     });
   }
+
+  removeIfEmptyData(element);
 }
 
 function jqLiteRemoveData(element, name) {
@@ -355,17 +380,11 @@ function jqLiteRemoveData(element, name) {
   if (expandoStore) {
     if (name) {
       delete expandoStore.data[name];
-      return;
+    } else {
+      expandoStore.data = {};
     }
 
-    if (expandoStore.handle) {
-      if (expandoStore.events.$destroy) {
-        expandoStore.handle({}, '$destroy');
-      }
-      jqLiteOff(element);
-    }
-    delete jqCache[expandoId];
-    element.ng339 = undefined; // don't delete DOM expandos. IE and Chrome don't like it
+    removeIfEmptyData(element);
   }
 }
 
@@ -615,6 +634,7 @@ forEach({
   cleanData: function jqLiteCleanData(nodes) {
     for (var i = 0, ii = nodes.length; i < ii; i++) {
       jqLiteRemoveData(nodes[i]);
+      jqLiteOff(nodes[i]);
     }
   }
 }, function(fn, name) {

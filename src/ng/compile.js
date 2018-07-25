@@ -339,6 +339,11 @@
  *   One-way binding is useful if you do not plan to propagate changes to your isolated scope bindings
  *   back to the parent. However, it does not make this completely impossible.
  *
+ *   By default, the {@link ng.$rootScope.Scope#$watch `$watch`}
+ *   method is used for tracking changes, and the equality check is based on object identity.
+ *   It's also possible to watch the evaluated value shallowly with
+ *   {@link ng.$rootScope.Scope#$watchCollection `$watchCollection`}: use `<*` or `<*attr`
+ *
  * * `&` or `&attr` - provides a way to execute an expression in the context of the parent scope. If
  *   no `attr` name is specified then the attribute name is assumed to be the same as the local name.
  *   Given `<my-component my-attr="count = count + value">` and the isolate scope definition `scope: {
@@ -531,9 +536,10 @@
  * $sce#getTrustedResourceUrl $sce.getTrustedResourceUrl}.
  *
  *
- * #### `replace` (*DEPRECATED*)
- *
- * `replace` will be removed in next major release - i.e. v2.0).
+ * #### `replace`
+ * <div class="alert alert-danger">
+ * **Note:** `replace` is deprecated in AngularJS and has been removed in the new Angular (v2+).
+ * </div>
  *
  * Specifies what the template should replace. Defaults to `false`.
  *
@@ -983,6 +989,58 @@
    compiled again. This is an undesired effect and can lead to misbehaving directives, performance issues,
    and memory leaks. Refer to the Compiler Guide {@link guide/compiler#double-compilation-and-how-to-avoid-it
    section on double compilation} for an in-depth explanation and ways to avoid it.
+
+ * @knownIssue
+
+   ### Issues with `replace: true`
+ *
+ * <div class="alert alert-danger">
+ *   **Note**: {@link $compile#-replace- `replace: true`} is deprecated and not recommended to use,
+ *   mainly due to the issues listed here. It has been completely removed in the new Angular.
+ * </div>
+ *
+ * #### Attribute values are not merged
+ *
+ * When a `replace` directive encounters the same attribute on the original and the replace node,
+ * it will simply deduplicate the attribute and join the values with a space or with a `;` in case of
+ * the `style` attribute.
+ * ```html
+ * Original Node: <span class="original" style="color: red;"></span>
+ * Replace Template: <span class="replaced" style="background: blue;"></span>
+ * Result: <span class="original replaced" style="color: red; background: blue;"></span>
+ * ```
+ *
+ * That means attributes that contain AngularJS expressions will not be merged correctly, e.g.
+ * {@link ngShow} or {@link ngClass} will cause a {@link $parse} error:
+ *
+ * ```html
+ * Original Node: <span ng-class="{'something': something}" ng-show="!condition"></span>
+ * Replace Template: <span ng-class="{'else': else}" ng-show="otherCondition"></span>
+ * Result: <span ng-class="{'something': something} {'else': else}" ng-show="!condition otherCondition"></span>
+ * ```
+ *
+ * See issue [#5695](https://github.com/angular/angular.js/issues/5695).
+ *
+ * #### Directives are not deduplicated before compilation
+ *
+ * When the original node and the replace template declare the same directive(s), they will be
+ * {@link guide/compiler#double-compilation-and-how-to-avoid-it compiled twice} because the compiler
+ * does not deduplicate them. In many cases, this is not noticable, but e.g. {@link ngModel} will
+ * attach `$formatters` and `$parsers` twice.
+ *
+ * See issue [#2573](https://github.com/angular/angular.js/issues/2573).
+ *
+ * #### `transclude: element` in the replace template root can have unexpected effects
+ *
+ * When the replace template has a directive at the root node that uses
+ * {@link $compile#-transclude- `transclude: element`}, e.g.
+ * {@link ngIf} or {@link ngRepeat}, the DOM structure or scope inheritance can be incorrect.
+ * See the following issues:
+ *
+ * - Incorrect scope on replaced element:
+ * [#9837](https://github.com/angular/angular.js/issues/9837)
+ * - Different DOM between `template` and `templateUrl`:
+ * [#10612](https://github.com/angular/angular.js/issues/14326)
  *
  */
 
@@ -1014,11 +1072,13 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
   var bindingCache = createMap();
 
   function parseIsolateBindings(scope, directiveName, isController) {
-    var LOCAL_REGEXP = /^\s*([@&<]|=(\*?))(\??)\s*([\w$]*)\s*$/;
+    var LOCAL_REGEXP = /^([@&]|[=<](\*?))(\??)\s*([\w$]*)$/;
 
     var bindings = createMap();
 
     forEach(scope, function(definition, scopeName) {
+      definition = definition.trim();
+
       if (definition in bindingCache) {
         bindings[scopeName] = bindingCache[definition];
         return;
@@ -1415,16 +1475,19 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
    * @ngdoc method
    * @name  $compileProvider#strictComponentBindingsEnabled
    *
-   * @param {boolean=} enabled update the strictComponentBindingsEnabled state if provided, otherwise just return the
-   * current strictComponentBindingsEnabled state
+   * @param {boolean=} enabled update the strictComponentBindingsEnabled state if provided,
+   * otherwise return the current strictComponentBindingsEnabled state.
    * @returns {*} current value if used as getter or itself (chaining) if used as setter
    *
    * @kind function
    *
    * @description
-   * Call this method to enable/disable strict component bindings check. If enabled, the compiler will enforce that
-   * for all bindings of a component that are not set as optional with `?`, an attribute needs to be provided
-   * on the component's HTML tag.
+   * Call this method to enable / disable the strict component bindings check. If enabled, the
+   * compiler will enforce that all scope / controller bindings of a
+   * {@link $compileProvider#directive directive} / {@link $compileProvider#component component}
+   * that are not set as optional with `?`, must be provided when the directive is instantiated.
+   * If not provided, the compiler will throw the
+   * {@link error/$compile/missingattr $compile:missingattr error}.
    *
    * The default value is false.
    */
@@ -1525,9 +1588,9 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
   this.$get = [
             '$injector', '$interpolate', '$exceptionHandler', '$templateRequest', '$parse',
-            '$controller', '$rootScope', '$sce', '$animate', '$$sanitizeUri',
+            '$controller', '$rootScope', '$sce', '$animate',
     function($injector,   $interpolate,   $exceptionHandler,   $templateRequest,   $parse,
-             $controller,   $rootScope,   $sce,   $animate,   $$sanitizeUri) {
+             $controller,   $rootScope,   $sce,   $animate) {
 
     var SIMPLE_ATTR_NAME = /^\w/;
     var specialAttrHolder = window.document.createElement('div');
@@ -1552,19 +1615,15 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
         }
         // We must run this hook in an apply since the $$postDigest runs outside apply
         $rootScope.$apply(function() {
-          var errors = [];
           for (var i = 0, ii = onChangesQueue.length; i < ii; ++i) {
             try {
               onChangesQueue[i]();
             } catch (e) {
-              errors.push(e);
+              $exceptionHandler(e);
             }
           }
           // Reset the queue to trigger a new schedule next time there is a change
           onChangesQueue = undefined;
-          if (errors.length) {
-            throw errors;
-          }
         });
       } finally {
         onChangesTtl++;
@@ -1676,8 +1735,8 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
        */
       $set: function(key, value, writeAttr, attrName) {
         // TODO: decide whether or not to throw an error if "class"
-        //is set through this function since it may cause $updateClass to
-        //become unstable.
+        // is set through this function since it may cause $updateClass to
+        // become unstable.
 
         var node = this.$$element[0],
             booleanKey = getBooleanAttrName(node, key),
@@ -1707,13 +1766,20 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
         nodeName = nodeName_(this.$$element);
 
-        if ((nodeName === 'a' && (key === 'href' || key === 'xlinkHref')) ||
-            (nodeName === 'img' && key === 'src') ||
-            (nodeName === 'image' && key === 'xlinkHref')) {
-          // sanitize a[href] and img[src] values
-          this[key] = value = $$sanitizeUri(value, nodeName === 'img' || nodeName === 'image');
-        } else if (nodeName === 'img' && key === 'srcset' && isDefined(value)) {
-          // sanitize img[srcset] values
+        // Sanitize img[srcset] values.
+        if (nodeName === 'img' && key === 'srcset' && value) {
+          if (!isString(value)) {
+            throw $compileMinErr('srcset', 'Can\'t pass trusted values to `$set(\'srcset\', value)`: "{0}"', value.toString());
+          }
+
+          // Such values are a bit too complex to handle automatically inside $sce.
+          // Instead, we sanitize each of the URIs individually, which works, even dynamically.
+
+          // It's not possible to work around this using `$sce.trustAsMediaUrl`.
+          // If you want to programmatically set explicitly trusted unsafe URLs, you should use
+          // `$sce.trustAsHtml` on the whole `img` tag and inject it into the DOM using the
+          // `ng-bind-html` directive.
+
           var result = '';
 
           // first check if there are spaces because it's not the same pattern
@@ -1730,16 +1796,16 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
           for (var i = 0; i < nbrUrisWith2parts; i++) {
             var innerIdx = i * 2;
             // sanitize the uri
-            result += $$sanitizeUri(trim(rawUris[innerIdx]), true);
+            result += $sce.getTrustedMediaUrl(trim(rawUris[innerIdx]));
             // add the descriptor
-            result += (' ' + trim(rawUris[innerIdx + 1]));
+            result += ' ' + trim(rawUris[innerIdx + 1]);
           }
 
           // split the last item into uri and descriptor
           var lastTuple = trim(rawUris[i * 2]).split(/\s/);
 
           // sanitize the last uri
-          result += $$sanitizeUri(trim(lastTuple[0]), true);
+          result += $sce.getTrustedMediaUrl(trim(lastTuple[0]));
 
           // and add the last descriptor if any
           if (lastTuple.length === 2) {
@@ -1933,7 +1999,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
           // for call to the link function.
           // Note: This will already clone the nodes...
           $linkNode = jqLite(
-            wrapTemplate(namespace, jqLite('<div>').append($compileNodes).html())
+            wrapTemplate(namespace, jqLite('<div></div>').append($compileNodes).html())
           );
         } else if (cloneConnectFn) {
           // important!!: we must call our jqLite.clone() since the jQuery one is trying to be smart
@@ -2487,17 +2553,6 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
             compileNode = $compileNode[0];
             replaceWith(jqCollection, sliceArgs($template), compileNode);
 
-            // Support: Chrome < 50
-            // https://github.com/angular/angular.js/issues/14041
-
-            // In the versions of V8 prior to Chrome 50, the document fragment that is created
-            // in the `replaceWith` function is improperly garbage collected despite still
-            // being referenced by the `parentNode` property of all of the child nodes.  By adding
-            // a reference to the fragment via a different property, we can avoid that incorrect
-            // behavior.
-            // TODO: remove this line after Chrome 50 has been released
-            $template[0].$$parentNode = $template[0].parentNode;
-
             childTranscludeFn = compilationGenerator(mightHaveMultipleTransclusionError, $template, transcludeFn, terminalPriority,
                                         replaceDirective && replaceDirective.name, {
                                           // Don't pass in:
@@ -2519,7 +2574,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
 
               // We have transclusion slots,
               // collect them up, compile them and store their transclusion functions
-              $template = [];
+              $template = window.document.createDocumentFragment();
 
               var slotMap = createMap();
               var filledSlots = createMap();
@@ -2547,10 +2602,10 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
                 var slotName = slotMap[directiveNormalize(nodeName_(node))];
                 if (slotName) {
                   filledSlots[slotName] = true;
-                  slots[slotName] = slots[slotName] || [];
-                  slots[slotName].push(node);
+                  slots[slotName] = slots[slotName] || window.document.createDocumentFragment();
+                  slots[slotName].appendChild(node);
                 } else {
-                  $template.push(node);
+                  $template.appendChild(node);
                 }
               });
 
@@ -2564,9 +2619,12 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
               for (var slotName in slots) {
                 if (slots[slotName]) {
                   // Only define a transclusion function if the slot was filled
-                  slots[slotName] = compilationGenerator(mightHaveMultipleTransclusionError, slots[slotName], transcludeFn);
+                  var slotCompileNodes = jqLite(slots[slotName].childNodes);
+                  slots[slotName] = compilationGenerator(mightHaveMultipleTransclusionError, slotCompileNodes, transcludeFn);
                 }
               }
+
+              $template = jqLite($template.childNodes);
             }
 
             $compileNode.empty(); // clear contents
@@ -3265,14 +3323,18 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
       }
       var tag = nodeName_(node);
       // All tags with src attributes require a RESOURCE_URL value, except for
-      // img and various html5 media tags.
+      // img and various html5 media tags, which require the MEDIA_URL context.
       if (attrNormalizedName === 'src' || attrNormalizedName === 'ngSrc') {
         if (['img', 'video', 'audio', 'source', 'track'].indexOf(tag) === -1) {
           return $sce.RESOURCE_URL;
         }
+        return $sce.MEDIA_URL;
+      } else if (attrNormalizedName === 'xlinkHref') {
+        // Some xlink:href are okay, most aren't
+        if (tag === 'image') return $sce.MEDIA_URL;
+        if (tag === 'a') return $sce.URL;
+        return $sce.RESOURCE_URL;
       } else if (
-          // Some xlink:href are okay, most aren't
-          (attrNormalizedName === 'xlinkHref' && (tag !== 'image' && tag !== 'a')) ||
           // Formaction
           (tag === 'form' && attrNormalizedName === 'action') ||
           // If relative URLs can go where they are not expected to, then
@@ -3282,6 +3344,9 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
           (tag === 'link' && attrNormalizedName === 'href')
       ) {
         return $sce.RESOURCE_URL;
+      } else if (tag === 'a' && (attrNormalizedName === 'href' ||
+                                 attrNormalizedName === 'ngHref')) {
+        return $sce.URL;
       }
     }
 
@@ -3557,7 +3622,7 @@ function $CompileProvider($provide, $$sanitizeUriProvider) {
             var initialValue = destination[scopeName] = parentGet(scope);
             initialChanges[scopeName] = new SimpleChange(_UNINITIALIZED_VALUE, destination[scopeName]);
 
-            removeWatch = scope.$watch(parentGet, function parentValueWatchAction(newValue, oldValue) {
+            removeWatch = scope[definition.collection ? '$watchCollection' : '$watch'](parentGet, function parentValueWatchAction(newValue, oldValue) {
               if (oldValue === newValue) {
                 if (oldValue === initialValue || (isLiteral && equals(oldValue, initialValue))) {
                   return;
@@ -3644,7 +3709,9 @@ var SPECIAL_CHARS_REGEXP = /[:\-_]+(.)/g;
 function directiveNormalize(name) {
   return name
     .replace(PREFIX_REGEXP, '')
-    .replace(SPECIAL_CHARS_REGEXP, fnCamelCaseReplace);
+    .replace(SPECIAL_CHARS_REGEXP, function(_, letter, offset) {
+      return offset ? letter.toUpperCase() : letter;
+    });
 }
 
 /**

@@ -41,7 +41,7 @@ ModelOptions.prototype = {
     options = extend({}, options);
 
     // Inherit options from the parent if specified by the value `"$inherit"`
-    forEach(options, /* @this */ function(option, key) {
+    forEach(options, /** @this */ function(option, key) {
       if (option === '$inherit') {
         if (key === '*') {
           inheritAll = true;
@@ -102,7 +102,7 @@ defaultModelOptions = new ModelOptions({
  *
  * The `ngModelOptions` settings are found by evaluating the value of the attribute directive as
  * an AngularJS expression. This expression should evaluate to an object, whose properties contain
- * the settings. For example: `<div "ng-model-options"="{ debounce: 100 }"`.
+ * the settings. For example: `<div ng-model-options="{ debounce: 100 }"`.
  *
  * ## Inheriting Options
  *
@@ -177,6 +177,8 @@ defaultModelOptions = new ModelOptions({
  * `submit` event. Note that `ngClick` events will occur before the model is updated. Use `ngSubmit`
  * to have access to the updated model.
  *
+ * ### Overriding immediate updates
+ *
  * The following example shows how to override immediate updates. Changes on the inputs within the
  * form will update the model only when the control loses focus (blur event). If `escape` key is
  * pressed while the input field is focused, the value is reset to the value in the current model.
@@ -236,6 +238,8 @@ defaultModelOptions = new ModelOptions({
  *   </file>
  * </example>
  *
+ * ### Debouncing updates
+ *
  * The next example shows how to debounce model changes. Model will be updated only 1 sec after last change.
  * If the `Clear` button is pressed, any debounced action is canceled and the value becomes empty.
  *
@@ -259,6 +263,106 @@ defaultModelOptions = new ModelOptions({
  *       }]);
  *   </file>
  * </example>
+ *
+ * ### Default events, extra triggers, and catch-all debounce values
+ *
+ * This example shows the relationship between "default" update events and
+ * additional `updateOn` triggers.
+ *
+ * `default` events are those that are bound to the control, and when fired, update the `$viewValue`
+ * via {@link ngModel.NgModelController#$setViewValue $setViewValue}. Every event that is not listed
+ * in `updateOn` is considered a "default" event, since different control types have different
+ * default events.
+ *
+ * The control in this example updates by "default", "click", and "blur", with different `debounce`
+ * values. You can see that "click" doesn't have an individual `debounce` value -
+ * therefore it uses the `*` debounce value.
+ *
+ * There is also a button that calls {@link ngModel.NgModelController#$setViewValue $setViewValue}
+ * directly with a "custom" event. Since "custom" is not defined in the `updateOn` list,
+ * it is considered a "default" event and will update the
+ * control if "default" is defined in `updateOn`, and will receive the "default" debounce value.
+ * Note that this is just to illustrate how custom controls would possibly call `$setViewValue`.
+ *
+ * You can change the `updateOn` and `debounce` configuration to test different scenarios. This
+ * is done with {@link ngModel.NgModelController#$overrideModelOptions $overrideModelOptions}.
+ *
+  <example name="ngModelOptions-advanced" module="optionsExample">
+    <file name="index.html">
+       <model-update-demo></model-update-demo>
+    </file>
+    <file name="app.js">
+      angular.module('optionsExample', [])
+        .component('modelUpdateDemo', {
+          templateUrl: 'template.html',
+          controller: function() {
+            this.name = 'Chinua';
+
+            this.options = {
+              updateOn: 'default blur click',
+              debounce: {
+                default: 2000,
+                blur: 0,
+                '*': 1000
+              }
+            };
+
+            this.updateEvents = function() {
+              var eventList = this.options.updateOn.split(' ');
+              eventList.push('*');
+              var events = {};
+
+              for (var i = 0; i < eventList.length; i++) {
+                events[eventList[i]] = this.options.debounce[eventList[i]];
+              }
+
+              this.events = events;
+            };
+
+            this.updateOptions = function() {
+              var options = angular.extend(this.options, {
+                updateOn: Object.keys(this.events).join(' ').replace('*', ''),
+                debounce: this.events
+              });
+
+              this.form.input.$overrideModelOptions(options);
+            };
+
+            // Initialize the event form
+            this.updateEvents();
+          }
+        });
+    </file>
+    <file name="template.html">
+      <form name="$ctrl.form">
+        Input: <input type="text" name="input" ng-model="$ctrl.name" ng-model-options="$ctrl.options" />
+      </form>
+      Model: <tt>{{$ctrl.name}}</tt>
+      <hr>
+      <button ng-click="$ctrl.form.input.$setViewValue('some value', 'custom')">Trigger setViewValue with 'some value' and 'custom' event</button>
+
+      <hr>
+      <form ng-submit="$ctrl.updateOptions()">
+        <b>updateOn</b><br>
+        <input type="text" ng-model="$ctrl.options.updateOn" ng-change="$ctrl.updateEvents()" ng-model-options="{debounce: 500}">
+
+        <table>
+          <tr>
+            <th>Option</th>
+            <th>Debounce value</th>
+          </tr>
+          <tr ng-repeat="(key, value) in $ctrl.events">
+            <td>{{key}}</td>
+            <td><input type="number" ng-model="$ctrl.events[key]" /></td>
+          </tr>
+        </table>
+
+        <br>
+        <input type="submit" value="Update options">
+      </form>
+    </file>
+  </example>
+ *
  *
  * ## Model updates and validation
  *
@@ -302,16 +406,92 @@ defaultModelOptions = new ModelOptions({
  * </example>
  *
  *
+ * ## Programmatically changing options
+ *
+ * The `ngModelOptions` expression is only evaluated once when the directive is linked; it is not
+ * watched for changes. However, it is possible to override the options on a single
+ * {@link ngModel.NgModelController} instance with
+ * {@link ngModel.NgModelController#$overrideModelOptions `NgModelController#$overrideModelOptions()`}.
+ * See also the example for
+ * {@link ngModelOptions#default-events-extra-triggers-and-catch-all-debounce-values
+ * Default events, extra triggers, and catch-all debounce values}.
+ *
+ *
  * ## Specifying timezones
  *
  * You can specify the timezone that date/time input directives expect by providing its name in the
  * `timezone` property.
  *
+ *
+ * ## Formatting the value of `time` and `datetime-local`
+ *
+ * With the options `timeSecondsFormat` and `timeStripZeroSeconds` it is possible to adjust the value
+ * that is displayed in the control. Note that browsers may apply their own formatting
+ * in the user interface.
+ *
+   <example name="ngModelOptions-time-format" module="timeExample">
+     <file name="index.html">
+       <time-example></time-example>
+     </file>
+     <file name="script.js">
+        angular.module('timeExample', [])
+          .component('timeExample', {
+            templateUrl: 'timeExample.html',
+            controller: function() {
+              this.time = new Date(1970, 0, 1, 14, 57, 0);
+
+              this.options = {
+                timeSecondsFormat: 'ss',
+                timeStripZeroSeconds: true
+              };
+
+              this.optionChange = function() {
+                this.timeForm.timeFormatted.$overrideModelOptions(this.options);
+                this.time = new Date(this.time);
+              };
+            }
+          });
+     </file>
+     <file name="timeExample.html">
+       <form name="$ctrl.timeForm">
+         <strong>Default</strong>:
+         <input type="time" ng-model="$ctrl.time" step="any" /><br>
+         <strong>With options</strong>:
+         <input type="time" name="timeFormatted" ng-model="$ctrl.time" step="any" ng-model-options="$ctrl.options" />
+         <br>
+
+         Options:<br>
+         <code>timeSecondsFormat</code>:
+         <input
+           type="text"
+           ng-model="$ctrl.options.timeSecondsFormat"
+           ng-change="$ctrl.optionChange()">
+         <br>
+         <code>timeStripZeroSeconds</code>:
+         <input
+           type="checkbox"
+           ng-model="$ctrl.options.timeStripZeroSeconds"
+           ng-change="$ctrl.optionChange()">
+        </form>
+      </file>
+ *  </example>
+ *
  * @param {Object} ngModelOptions options to apply to {@link ngModel} directives on this element and
- *   and its descendents. Valid keys are:
+ *   and its descendents.
+ *
+ * **General options**:
+ *
  *   - `updateOn`: string specifying which event should the input be bound to. You can set several
  *     events using an space delimited list. There is a special event called `default` that
- *     matches the default events belonging to the control.
+ *     matches the default events belonging to the control. These are the events that are bound to
+ *     the control, and when fired, update the `$viewValue` via `$setViewValue`.
+ *
+ *     `ngModelOptions` considers every event that is not listed in `updateOn` a "default" event,
+ *     since different control types use different default events.
+ *
+ *     See also the section {@link ngModelOptions#triggering-and-debouncing-model-updates
+ *     Triggering and debouncing model updates}.
+ *
  *   - `debounce`: integer value which contains the debounce model update value in milliseconds. A
  *     value of 0 triggers an immediate update. If an object is supplied instead, you can specify a
  *     custom value for each event. For example:
@@ -321,15 +501,47 @@ defaultModelOptions = new ModelOptions({
  *       debounce: { 'default': 500, 'blur': 0 }
  *     }"
  *     ```
+ *     You can use the `*` key to specify a debounce value that applies to all events that are not
+ *     specifically listed. In the following example, `mouseup` would have a debounce delay of 1000:
+ *     ```
+ *     ng-model-options="{
+ *       updateOn: 'default blur mouseup',
+ *       debounce: { 'default': 500, 'blur': 0, '*': 1000 }
+ *     }"
+ *     ```
  *   - `allowInvalid`: boolean value which indicates that the model can be set with values that did
  *     not validate correctly instead of the default behavior of setting the model to undefined.
  *   - `getterSetter`: boolean value which determines whether or not to treat functions bound to
  *     `ngModel` as getters/setters.
+ *
+ *
+ *  **Input-type specific options**:
+ *
  *   - `timezone`: Defines the timezone to be used to read/write the `Date` instance in the model for
  *     `<input type="date" />`, `<input type="time" />`, ... . It understands UTC/GMT and the
  *     continental US time zone abbreviations, but for general use, use a time zone offset, for
  *     example, `'+0430'` (4 hours, 30 minutes east of the Greenwich meridian)
  *     If not specified, the timezone of the browser will be used.
+ *     Note that changing the timezone will have no effect on the current date, and is only applied after
+ *     the next input / model change.
+ *
+ *   - `timeSecondsFormat`: Defines if the `time` and `datetime-local` types should show seconds and
+ *     milliseconds. The option follows the format string of {@link date date filter}.
+ *     By default, the options is `undefined` which is equal to `'ss.sss'` (seconds and milliseconds).
+ *     The other options are `'ss'` (strips milliseconds), and `''` (empty string), which strips both
+ *     seconds and milliseconds.
+ *     Note that browsers that support `time` and `datetime-local` require the hour and minutes
+ *     part of the time string, and may show the value differently in the user interface.
+ *     {@link ngModelOptions#formatting-the-value-of-time-and-datetime-local- See the example}.
+ *
+ *   - `timeStripZeroSeconds`: Defines if the `time` and `datetime-local` types should strip the
+ *     seconds and milliseconds from the formatted value if they are zero. This option is applied
+ *     after `timeSecondsFormat`.
+ *     This option can be used to make the formatting consistent over different browsers, as some
+ *     browsers with support for `time` will natively hide the milliseconds and
+ *     seconds if they are zero, but others won't, and browsers that don't implement these input
+ *     types will always show the full string.
+ *     {@link ngModelOptions#formatting-the-value-of-time-and-datetime-local- See the example}.
  *
  */
 var ngModelOptionsDirective = function() {

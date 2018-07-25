@@ -21,8 +21,6 @@
 
   lowercase,
   uppercase,
-  manualLowercase,
-  manualUppercase,
   nodeName_,
   isArrayLike,
   forEach,
@@ -75,6 +73,7 @@
   fromJson,
   convertTimezoneToLocal,
   timezoneToOffset,
+  addDateMinutes,
   startingTag,
   tryDecodeURIComponent,
   parseKeyValue,
@@ -147,31 +146,6 @@ var lowercase = function(string) {return isString(string) ? string.toLowerCase()
 var uppercase = function(string) {return isString(string) ? string.toUpperCase() : string;};
 
 
-var manualLowercase = function(s) {
-  /* eslint-disable no-bitwise */
-  return isString(s)
-      ? s.replace(/[A-Z]/g, function(ch) {return String.fromCharCode(ch.charCodeAt(0) | 32);})
-      : s;
-  /* eslint-enable */
-};
-var manualUppercase = function(s) {
-  /* eslint-disable no-bitwise */
-  return isString(s)
-      ? s.replace(/[a-z]/g, function(ch) {return String.fromCharCode(ch.charCodeAt(0) & ~32);})
-      : s;
-  /* eslint-enable */
-};
-
-
-// String#toLowerCase and String#toUpperCase don't produce correct results in browsers with Turkish
-// locale, for this reason we need to detect this case and redefine lowercase/uppercase methods
-// with correct but slower alternatives. See https://github.com/angular/angular.js/issues/11387
-if ('i' !== 'I'.toLowerCase()) {
-  lowercase = manualLowercase;
-  uppercase = manualUppercase;
-}
-
-
 var
     msie,             // holds major version number for IE, or NaN if UA is not IE.
     jqLite,           // delay binding since jQuery could be loaded after us.
@@ -219,8 +193,7 @@ function isArrayLike(obj) {
 
   // NodeList objects (with `item` method) and
   // other objects with suitable length characteristics are array-like
-  return isNumber(length) &&
-    (length >= 0 && ((length - 1) in obj || obj instanceof Array) || typeof obj.item === 'function');
+  return isNumber(length) && (length >= 0 && (length - 1) in obj || typeof obj.item === 'function');
 
 }
 
@@ -635,12 +608,14 @@ function isDate(value) {
  * @kind function
  *
  * @description
- * Determines if a reference is an `Array`. Alias of Array.isArray.
+ * Determines if a reference is an `Array`.
  *
  * @param {*} value Reference to check.
  * @returns {boolean} True if `value` is an `Array`.
  */
-var isArray = Array.isArray;
+function isArray(arr) {
+  return Array.isArray(arr) || arr instanceof Array;
+}
 
 /**
  * @description
@@ -1368,7 +1343,7 @@ function convertTimezoneToLocal(date, timezone, reverse) {
  */
 function startingTag(element) {
   element = jqLite(element).clone().empty();
-  var elemHtml = jqLite('<div>').append(element).html();
+  var elemHtml = jqLite('<div></div>').append(element).html();
   try {
     return element[0].nodeType === NODE_TYPE_TEXT ? lowercase(elemHtml) :
         elemHtml.
@@ -1923,24 +1898,24 @@ function bindJQuery() {
       injector: JQLitePrototype.injector,
       inheritedData: JQLitePrototype.inheritedData
     });
-
-    // All nodes removed from the DOM via various jQuery APIs like .remove()
-    // are passed through jQuery.cleanData. Monkey-patch this method to fire
-    // the $destroy event on all removed nodes.
-    originalCleanData = jQuery.cleanData;
-    jQuery.cleanData = function(elems) {
-      var events;
-      for (var i = 0, elem; (elem = elems[i]) != null; i++) {
-        events = jQuery._data(elem, 'events');
-        if (events && events.$destroy) {
-          jQuery(elem).triggerHandler('$destroy');
-        }
-      }
-      originalCleanData(elems);
-    };
   } else {
     jqLite = JQLite;
   }
+
+  // All nodes removed from the DOM via various jqLite/jQuery APIs like .remove()
+  // are passed through jqLite/jQuery.cleanData. Monkey-patch this method to fire
+  // the $destroy event on all removed nodes.
+  originalCleanData = jqLite.cleanData;
+  jqLite.cleanData = function(elems) {
+    var events;
+    for (var i = 0, elem; (elem = elems[i]) != null; i++) {
+      events = (jqLite._data(elem) || {}).events;
+      if (events && events.$destroy) {
+        jqLite(elem).triggerHandler('$destroy');
+      }
+    }
+    originalCleanData(elems);
+  };
 
   angular.element = jqLite;
 

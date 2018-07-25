@@ -539,6 +539,113 @@ describe('form', function() {
       expect(parent.$submitted).toBeTruthy();
     });
 
+    it('should set $submitted to true on child forms when parent is submitted', function() {
+      doc = jqLite(
+          '<ng-form name="parent">' +
+            '<ng-form name="child">' +
+              '<input ng:model="modelA" name="inputA">' +
+              '<input ng:model="modelB" name="inputB">' +
+            '</ng-form>' +
+          '</ng-form>');
+      $compile(doc)(scope);
+
+      var parent = scope.parent,
+          child = scope.child;
+
+      parent.$setSubmitted();
+      expect(parent.$submitted).toBeTruthy();
+      expect(child.$submitted).toBeTruthy();
+    });
+
+
+    it('should not propagate $submitted state on removed child forms when parent is submitted', function() {
+      doc = jqLite(
+          '<ng-form name="parent">' +
+            '<ng-form name="child">' +
+              '<ng-form name="grandchild">' +
+                '<input ng:model="modelA" name="inputA">' +
+              '</ng-form>' +
+            '</ng-form>' +
+          '</ng-form>');
+      $compile(doc)(scope);
+
+      var parent = scope.parent,
+          child = scope.child,
+          grandchild = scope.grandchild,
+          ggchild = scope.greatgrandchild;
+
+      parent.$removeControl(child);
+
+      parent.$setSubmitted();
+      expect(parent.$submitted).toBeTruthy();
+      expect(child.$submitted).not.toBeTruthy();
+      expect(grandchild.$submitted).not.toBeTruthy();
+
+      parent.$addControl(child);
+
+      expect(parent.$submitted).toBeTruthy();
+      expect(child.$submitted).not.toBeTruthy();
+      expect(grandchild.$submitted).not.toBeTruthy();
+
+      parent.$setSubmitted();
+      expect(parent.$submitted).toBeTruthy();
+      expect(child.$submitted).toBeTruthy();
+      expect(grandchild.$submitted).toBeTruthy();
+
+      parent.$removeControl(child);
+
+      expect(parent.$submitted).toBeTruthy();
+      expect(child.$submitted).toBeTruthy();
+      expect(grandchild.$submitted).toBeTruthy();
+
+      parent.$setPristine(); // sets $submitted to false
+      expect(parent.$submitted).not.toBeTruthy();
+      expect(child.$submitted).toBeTruthy();
+      expect(grandchild.$submitted).toBeTruthy();
+
+      grandchild.$setPristine();
+      expect(grandchild.$submitted).not.toBeTruthy();
+
+      child.$setSubmitted();
+      expect(parent.$submitted).not.toBeTruthy();
+      expect(child.$submitted).toBeTruthy();
+      expect(grandchild.$submitted).toBeTruthy();
+
+      child.$setPristine();
+      expect(parent.$submitted).not.toBeTruthy();
+      expect(child.$submitted).not.toBeTruthy();
+      expect(grandchild.$submitted).not.toBeTruthy();
+
+      // Test upwards submission setting
+      grandchild.$setSubmitted();
+      expect(parent.$submitted).not.toBeTruthy();
+      expect(child.$submitted).toBeTruthy();
+      expect(grandchild.$submitted).toBeTruthy();
+    });
+
+
+    it('should set $submitted to true on child and parent forms when form is submitted', function() {
+      doc = jqLite(
+          '<ng-form name="parent">' +
+            '<ng-form name="child">' +
+              '<ng-form name="grandchild">' +
+                '<input ng:model="modelA" name="inputA">' +
+                '<input ng:model="modelB" name="inputB">' +
+              '</ng-form>' +
+            '</ng-form>' +
+          '</ng-form>');
+      $compile(doc)(scope);
+
+      var parent = scope.parent,
+          child = scope.child,
+          grandchild = scope.grandchild;
+
+      child.$setSubmitted();
+
+      expect(parent.$submitted).toBeTruthy();
+      expect(child.$submitted).toBeTruthy();
+      expect(grandchild.$submitted).toBeTruthy();
+    });
 
     it('should deregister a child form when its DOM is removed', function() {
       doc = jqLite(
@@ -1093,6 +1200,52 @@ describe('form', function() {
     });
   });
 
+  describe('$getControls', function() {
+    it('should return an empty array if the controller has no controls', function() {
+      doc = $compile('<form name="testForm"></form>')(scope);
+
+      scope.$digest();
+
+      var formCtrl = scope.testForm;
+
+      expect(formCtrl.$getControls()).toEqual([]);
+    });
+
+    it('should return a shallow copy of the form controls', function() {
+      doc = $compile(
+          '<form name="testForm">' +
+            '<input ng-model="named" name="foo">' +
+            '<div ng-form>' +
+              '<input ng-model="named" name="foo">' +
+            '</div>' +
+          '</form>')(scope);
+
+      scope.$digest();
+
+      var form = doc,
+          formCtrl = scope.testForm,
+          formInput = form.children('input').eq(0),
+          formInputCtrl = formInput.controller('ngModel'),
+          nestedForm = form.find('div'),
+          nestedFormCtrl = nestedForm.controller('form'),
+          nestedInput = nestedForm.children('input').eq(0),
+          nestedInputCtrl = nestedInput.controller('ngModel');
+
+      var controls = formCtrl.$getControls();
+
+      expect(controls).not.toBe(formCtrl.$$controls);
+
+      controls.push('something');
+      expect(formCtrl.$$controls).not.toContain('something');
+
+      expect(controls[0]).toBe(formInputCtrl);
+      expect(controls[1]).toBe(nestedFormCtrl);
+
+      var nestedControls = controls[1].$getControls();
+
+      expect(nestedControls[0]).toBe(nestedInputCtrl);
+    });
+  });
 
   it('should rename nested form controls when interpolated name changes', function() {
     scope.idA = 'A';

@@ -9,17 +9,236 @@ describe('$aria', function() {
     dealoc(element);
   });
 
-  function injectScopeAndCompiler() {
-    return inject(function(_$compile_, _$rootScope_) {
-      $compile = _$compile_;
-      scope = _$rootScope_;
-    });
-  }
+  describe('with `ngAriaDisable`', function() {
+    beforeEach(injectScopeAndCompiler);
+    beforeEach(function() {
+      jasmine.addMatchers({
+        toHaveAttribute: function toHaveAttributeMatcher() {
+          return {
+            compare: function toHaveAttributeCompare(element, attr) {
+              var node = element[0];
+              var pass = node.hasAttribute(attr);
+              var message = 'Expected `' + node.outerHTML + '` ' + (pass ? 'not ' : '') +
+                            'to have attribute `' + attr + '`.';
 
-  function compileElement(inputHtml) {
-    element = $compile(inputHtml)(scope);
-    scope.$digest();
-  }
+              return {
+                pass: pass,
+                message: message
+              };
+            }
+          };
+        }
+      });
+    });
+
+    // ariaChecked
+    it('should not attach aria-checked to custom checkbox', function() {
+      compileElement('<div role="checkbox" ng-model="val" ng-aria-disable></div>');
+
+      scope.$apply('val = false');
+      expect(element).not.toHaveAttribute('aria-checked');
+
+      scope.$apply('val = true');
+      expect(element).not.toHaveAttribute('aria-checked');
+    });
+
+    it('should not attach aria-checked to custom radio controls', function() {
+      compileElement(
+          '<div role="radio" ng-model="val" value="one" ng-aria-disable></div>' +
+          '<div role="radio" ng-model="val" value="two" ng-aria-disable></div>');
+
+      var radio1 = element.eq(0);
+      var radio2 = element.eq(1);
+
+      scope.$apply('val = "one"');
+      expect(radio1).not.toHaveAttribute('aria-checked');
+      expect(radio2).not.toHaveAttribute('aria-checked');
+
+      scope.$apply('val = "two"');
+      expect(radio1).not.toHaveAttribute('aria-checked');
+      expect(radio2).not.toHaveAttribute('aria-checked');
+    });
+
+    // ariaDisabled
+    it('should not attach aria-disabled to custom controls', function() {
+      compileElement('<div ng-disabled="val" ng-aria-disable></div>');
+
+      scope.$apply('val = false');
+      expect(element).not.toHaveAttribute('aria-disabled');
+
+      scope.$apply('val = true');
+      expect(element).not.toHaveAttribute('aria-disabled');
+    });
+
+    // ariaHidden
+    it('should not attach aria-hidden to `ngShow`', function() {
+      compileElement('<div ng-show="val" ng-aria-disable></div>');
+
+      scope.$apply('val = false');
+      expect(element).not.toHaveAttribute('aria-hidden');
+
+      scope.$apply('val = true');
+      expect(element).not.toHaveAttribute('aria-hidden');
+    });
+
+    it('should not attach aria-hidden to `ngHide`', function() {
+      compileElement('<div ng-hide="val" ng-aria-disable></div>');
+
+      scope.$apply('val = false');
+      expect(element).not.toHaveAttribute('aria-hidden');
+
+      scope.$apply('val = true');
+      expect(element).not.toHaveAttribute('aria-hidden');
+    });
+
+    // ariaInvalid
+    it('should not attach aria-invalid to input', function() {
+      compileElement('<input ng-model="val" ng-minlength="10" ng-aria-disable />');
+
+      scope.$apply('val = "lt 10"');
+      expect(element).not.toHaveAttribute('aria-invalid');
+
+      scope.$apply('val = "gt 10 characters"');
+      expect(element).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('should not attach aria-invalid to custom controls', function() {
+      compileElement('<div role="textbox" ng-model="val" ng-minlength="10" ng-aria-disable></div>');
+
+      scope.$apply('val = "lt 10"');
+      expect(element).not.toHaveAttribute('aria-invalid');
+
+      scope.$apply('val = "gt 10 characters"');
+      expect(element).not.toHaveAttribute('aria-invalid');
+    });
+
+    // ariaLive
+    it('should not attach aria-live to `ngMessages`', function() {
+      compileElement('<div ng-messages="val" ng-aria-disable>');
+      expect(element).not.toHaveAttribute('aria-live');
+    });
+
+    // ariaReadonly
+    it('should not attach aria-readonly to custom controls', function() {
+      compileElement('<div ng-readonly="val" ng-aria-disable></div>');
+
+      scope.$apply('val = false');
+      expect(element).not.toHaveAttribute('aria-readonly');
+
+      scope.$apply('val = true');
+      expect(element).not.toHaveAttribute('aria-readonly');
+    });
+
+    // ariaRequired
+    it('should not attach aria-required to custom controls with `required`', function() {
+      compileElement('<div ng-model="val" required ng-aria-disable></div>');
+      expect(element).not.toHaveAttribute('aria-required');
+    });
+
+    it('should not attach aria-required to custom controls with `ngRequired`', function() {
+      compileElement('<div ng-model="val" ng-required="val" ng-aria-disable></div>');
+
+      scope.$apply('val = false');
+      expect(element).not.toHaveAttribute('aria-required');
+
+      scope.$apply('val = true');
+      expect(element).not.toHaveAttribute('aria-required');
+    });
+
+    // ariaValue
+    it('should not attach aria-value* to input[range]', function() {
+      compileElement('<input type="range" ng-model="val" min="0" max="100" ng-aria-disable />');
+
+      expect(element).not.toHaveAttribute('aria-valuemax');
+      expect(element).not.toHaveAttribute('aria-valuemin');
+      expect(element).not.toHaveAttribute('aria-valuenow');
+
+      scope.$apply('val = 50');
+      expect(element).not.toHaveAttribute('aria-valuemax');
+      expect(element).not.toHaveAttribute('aria-valuemin');
+      expect(element).not.toHaveAttribute('aria-valuenow');
+
+      scope.$apply('val = 150');
+      expect(element).not.toHaveAttribute('aria-valuemax');
+      expect(element).not.toHaveAttribute('aria-valuemin');
+      expect(element).not.toHaveAttribute('aria-valuenow');
+    });
+
+    it('should not attach aria-value* to custom controls', function() {
+      compileElement(
+          '<div role="progressbar" ng-model="val" min="0" max="100" ng-aria-disable></div>' +
+          '<div role="slider" ng-model="val" min="0" max="100" ng-aria-disable></div>');
+
+      var progressbar = element.eq(0);
+      var slider = element.eq(1);
+
+      ['aria-valuemax', 'aria-valuemin', 'aria-valuenow'].forEach(function(attr) {
+        expect(progressbar).not.toHaveAttribute(attr);
+        expect(slider).not.toHaveAttribute(attr);
+      });
+
+      scope.$apply('val = 50');
+      ['aria-valuemax', 'aria-valuemin', 'aria-valuenow'].forEach(function(attr) {
+        expect(progressbar).not.toHaveAttribute(attr);
+        expect(slider).not.toHaveAttribute(attr);
+      });
+
+      scope.$apply('val = 150');
+      ['aria-valuemax', 'aria-valuemin', 'aria-valuenow'].forEach(function(attr) {
+        expect(progressbar).not.toHaveAttribute(attr);
+        expect(slider).not.toHaveAttribute(attr);
+      });
+    });
+
+    // bindKeypress
+    it('should not bind keypress to `ngClick`', function() {
+      scope.onClick = jasmine.createSpy('onClick');
+      compileElement(
+          '<div ng-click="onClick()" tabindex="0" ng-aria-disable></div>' +
+          '<ul><li ng-click="onClick()" tabindex="0" ng-aria-disable></li></ul>');
+
+      var div = element.find('div');
+      var li = element.find('li');
+
+      div.triggerHandler({type: 'keypress', keyCode: 32});
+      li.triggerHandler({type: 'keypress', keyCode: 32});
+
+      expect(scope.onClick).not.toHaveBeenCalled();
+    });
+
+    // bindRoleForClick
+    it('should not attach role to custom controls', function() {
+      compileElement(
+          '<div ng-click="onClick()" ng-aria-disable></div>' +
+          '<div type="checkbox" ng-model="val" ng-aria-disable></div>' +
+          '<div type="radio" ng-model="val" ng-aria-disable></div>' +
+          '<div type="range" ng-model="val" ng-aria-disable></div>');
+
+      expect(element.eq(0)).not.toHaveAttribute('role');
+      expect(element.eq(1)).not.toHaveAttribute('role');
+      expect(element.eq(2)).not.toHaveAttribute('role');
+      expect(element.eq(3)).not.toHaveAttribute('role');
+    });
+
+    // tabindex
+    it('should not attach tabindex to custom controls', function() {
+      compileElement(
+          '<div role="checkbox" ng-model="val" ng-aria-disable></div>' +
+          '<div role="slider" ng-model="val" ng-aria-disable></div>');
+
+      expect(element.eq(0)).not.toHaveAttribute('tabindex');
+      expect(element.eq(1)).not.toHaveAttribute('tabindex');
+    });
+
+    it('should not attach tabindex to `ngClick` or `ngDblclick`', function() {
+      compileElement(
+          '<div ng-click="onClick()" ng-aria-disable></div>' +
+          '<div ng-dblclick="onDblclick()" ng-aria-disable></div>');
+
+      expect(element.eq(0)).not.toHaveAttribute('tabindex');
+      expect(element.eq(1)).not.toHaveAttribute('tabindex');
+    });
+  });
 
   describe('aria-hidden', function() {
     beforeEach(injectScopeAndCompiler);
@@ -420,6 +639,21 @@ describe('$aria', function() {
       scope.$apply('txtInput=\'LTten\'');
       expect(element.attr('aria-invalid')).toBe('userSetValue');
     });
+
+    it('should not attach if input is type="hidden"', function() {
+      compileElement('<input type="hidden" ng-model="txtInput">');
+      expect(element.attr('aria-invalid')).toBeUndefined();
+    });
+
+
+    it('should attach aria-invalid to custom control that is type="hidden"', function() {
+      compileElement('<div ng-model="txtInput" type="hidden" role="textbox" ng-minlength="10"></div>');
+      scope.$apply('txtInput=\'LTten\'');
+      expect(element.attr('aria-invalid')).toBe('true');
+
+      scope.$apply('txtInput=\'morethantencharacters\'');
+      expect(element.attr('aria-invalid')).toBe('false');
+    });
   });
 
   describe('aria-invalid when disabled', function() {
@@ -688,115 +922,100 @@ describe('$aria', function() {
   });
 
   describe('accessible actions', function() {
+    var clickEvents;
+
     beforeEach(injectScopeAndCompiler);
+    beforeEach(function() {
+      clickEvents = [];
+      scope.onClick = jasmine.createSpy('onClick').and.callFake(function(evt) {
+        var nodeName = evt ? evt.target.nodeName.toLowerCase() : '';
+        var prevented = !!(evt && evt.isDefaultPrevented());
+        clickEvents.push(nodeName + '(' + prevented + ')');
+      });
+    });
 
-    var clickFn;
+    it('should trigger a click from the keyboard (and prevent default action)', function() {
+      compileElement(
+        '<section>' +
+          '<div ng-click="onClick($event)"></div>' +
+          '<ul><li ng-click="onClick($event)"></li></ul>' +
+        '</section>');
 
-    it('should trigger a click from the keyboard', function() {
-      scope.someAction = function() {};
+      var divElement = element.find('div');
+      var liElement = element.find('li');
 
-      var elements = $compile('<section>' +
-                  '<div class="div-click" ng-click="someAction(\'div\')" tabindex="0"></div>' +
-                  '<ul><li ng-click="someAction( \'li\')" tabindex="0"></li></ul>' +
-                  '</section>')(scope);
-
-      scope.$digest();
-
-      clickFn = spyOn(scope, 'someAction');
-
-      var divElement = elements.find('div');
-      var liElement = elements.find('li');
-
+      divElement.triggerHandler({type: 'keydown', keyCode: 13});
+      liElement.triggerHandler({type: 'keydown', keyCode: 13});
       divElement.triggerHandler({type: 'keydown', keyCode: 32});
       liElement.triggerHandler({type: 'keydown', keyCode: 32});
 
-      expect(clickFn).toHaveBeenCalledWith('div');
-      expect(clickFn).toHaveBeenCalledWith('li');
+      expect(clickEvents).toEqual(['div(true)', 'li(true)', 'div(true)', 'li(true)']);
     });
 
-    it('should trigger a click in browsers that provide event.which instead of event.keyCode', function() {
-      scope.someAction = function() {};
+    it('should trigger a click in browsers that provide `event.which` instead of `event.keyCode`',
+      function() {
+        compileElement(
+          '<section>' +
+            '<div ng-click="onClick($event)"></div>' +
+            '<ul><li ng-click="onClick($event)"></li></ul>' +
+          '</section>');
 
-      var elements = $compile('<section>' +
-      '<div class="div-click" ng-click="someAction(\'div\')" tabindex="0"></div>' +
-      '<ul><li ng-click="someAction( \'li\')" tabindex="0"></li></ul>' +
-      '</section>')(scope);
+        var divElement = element.find('div');
+        var liElement = element.find('li');
 
-      scope.$digest();
+        divElement.triggerHandler({type: 'keydown', which: 13});
+        liElement.triggerHandler({type: 'keydown', which: 13});
+        divElement.triggerHandler({type: 'keydown', which: 32});
+        liElement.triggerHandler({type: 'keydown', which: 32});
 
-      clickFn = spyOn(scope, 'someAction');
+        expect(clickEvents).toEqual(['div(true)', 'li(true)', 'div(true)', 'li(true)']);
+      }
+    );
 
-      var divElement = elements.find('div');
-      var liElement = elements.find('li');
+    they('should not bind to key events if there is existing `ng-$prop`',
+      ['keydown', 'keypress', 'keyup'], function(eventName) {
+        scope.onKeyEvent = jasmine.createSpy('onKeyEvent');
+        compileElement('<div ng-click="onClick()" ng-' + eventName + '="onKeyEvent()"></div>');
 
-      divElement.triggerHandler({type: 'keydown', which: 32});
-      liElement.triggerHandler({type: 'keydown', which: 32});
+        element.triggerHandler({type: eventName, keyCode: 13});
+        element.triggerHandler({type: eventName, keyCode: 32});
 
-      expect(clickFn).toHaveBeenCalledWith('div');
-      expect(clickFn).toHaveBeenCalledWith('li');
-    });
-
-    it('should not bind to key events if there is existing ng-keydown', function() {
-      scope.onClick = jasmine.createSpy('onClick');
-      scope.onKeydown = jasmine.createSpy('onKeydown');
-
-      var tmpl = '<div ng-click="onClick()" ng-keydown="onKeydown()" tabindex="0"></div>';
-      compileElement(tmpl);
-
-      element.triggerHandler({type: 'keydown', keyCode: 32});
-
-      expect(scope.onKeydown).toHaveBeenCalled();
-      expect(scope.onClick).not.toHaveBeenCalled();
-    });
-
-    it('should not bind to key events if there is existing ng-keypress', function() {
-      scope.onClick = jasmine.createSpy('onClick');
-      scope.onKeypress = jasmine.createSpy('onKeypress');
-
-      var tmpl = '<div ng-click="onClick()" ng-keypress="onKeypress()" tabindex="0"></div>';
-      compileElement(tmpl);
-
-      element.triggerHandler({type: 'keypress', keyCode: 32});
-
-      expect(scope.onKeypress).toHaveBeenCalled();
-      expect(scope.onClick).not.toHaveBeenCalled();
-    });
-
-    it('should not bind to key events if there is existing ng-keyup', function() {
-      scope.onClick = jasmine.createSpy('onClick');
-      scope.onKeyup = jasmine.createSpy('onKeyup');
-
-      var tmpl = '<div ng-click="onClick()" ng-keyup="onKeyup()" tabindex="0"></div>';
-      compileElement(tmpl);
-
-      element.triggerHandler({type: 'keyup', keyCode: 32});
-
-      expect(scope.onKeyup).toHaveBeenCalled();
-      expect(scope.onClick).not.toHaveBeenCalled();
-    });
+        expect(scope.onClick).not.toHaveBeenCalled();
+        expect(scope.onKeyEvent).toHaveBeenCalledTimes(2);
+      }
+    );
 
     it('should update bindings when keydown is handled', function() {
-      compileElement('<div ng-click="text = \'clicked!\'">{{text}}</div>');
-      expect(element.text()).toBe('');
-      spyOn(scope.$root, '$digest').and.callThrough();
-      element.triggerHandler({ type: 'keydown', keyCode: 13 });
-      expect(element.text()).toBe('clicked!');
-      expect(scope.$root.$digest).toHaveBeenCalledOnce();
+      scope.count = 0;
+      compileElement('<div ng-click="count = count + 1">Count: {{ count }}</div>');
+
+      expect(element.text()).toBe('Count: 0');
+
+      element.triggerHandler({type: 'keydown', keyCode: 13});
+      expect(element.text()).toBe('Count: 1');
+
+      element.triggerHandler({type: 'keydown', keyCode: 32});
+      expect(element.text()).toBe('Count: 2');
     });
 
-    it('should pass $event to ng-click handler as local', function() {
-      compileElement('<div ng-click="event = $event">{{event.type}}' +
-                      '{{event.keyCode}}</div>');
+    it('should pass `$event` to `ng-click` handler as local', function() {
+      compileElement('<div ng-click="event = $event">{{ event.type }}{{ event.keyCode }}</div>');
       expect(element.text()).toBe('');
-      element.triggerHandler({ type: 'keydown', keyCode: 13 });
+
+      element.triggerHandler({type: 'keydown', keyCode: 13});
       expect(element.text()).toBe('keydown13');
+
+      element.triggerHandler({type: 'keydown', keyCode: 32});
+      expect(element.text()).toBe('keydown32');
     });
 
     it('should not bind keydown to natively interactive elements', function() {
-      compileElement('<button ng-click="event = $event">{{event.type}}{{event.keyCode}}</button>');
-      expect(element.text()).toBe('');
-      element.triggerHandler({ type: 'keydown', keyCode: 13 });
-      expect(element.text()).toBe('');
+      compileElement('<button ng-click="onClick()">Click me</button>');
+
+      element.triggerHandler({type: 'keydown', keyCode: 13});
+      element.triggerHandler({type: 'keydown', keyCode: 32});
+
+      expect(scope.onClick).not.toHaveBeenCalled();
     });
   });
 
@@ -880,19 +1099,31 @@ describe('$aria', function() {
       expect(element.attr('tabindex')).toBe('0');
     });
   });
-});
 
-function expectAriaAttrOnEachElement(elem, ariaAttr, expected) {
-  angular.forEach(elem, function(val) {
-    expect(angular.element(val).attr(ariaAttr)).toBe(expected);
-  });
-}
+  // Helpers
+  function compileElement(inputHtml) {
+    element = $compile(inputHtml)(scope);
+    scope.$digest();
+  }
 
-function configAriaProvider(config) {
-  return function() {
-    angular.module('ariaTest', ['ngAria']).config(function($ariaProvider) {
-      $ariaProvider.config(config);
+  function configAriaProvider(config) {
+    return function() {
+      module(function($ariaProvider) {
+        $ariaProvider.config(config);
+      });
+    };
+  }
+
+  function expectAriaAttrOnEachElement(elem, ariaAttr, expected) {
+    angular.forEach(elem, function(val) {
+      expect(angular.element(val).attr(ariaAttr)).toBe(expected);
     });
-    module('ariaTest');
-  };
-}
+  }
+
+  function injectScopeAndCompiler() {
+    return inject(function(_$compile_, _$rootScope_) {
+      $compile = _$compile_;
+      scope = _$rootScope_;
+    });
+  }
+});

@@ -1,6 +1,6 @@
 'use strict';
 
-var $templateRequestMinErr = minErr('$compile');
+var $templateRequestMinErr = minErr('$templateRequest');
 
 /**
  * @ngdoc provider
@@ -99,8 +99,7 @@ function $TemplateRequestProvider() {
             handleRequestFn.totalPendingRequests--;
           })
           .then(function(response) {
-            $templateCache.put(tpl, response.data);
-            return response.data;
+            return $templateCache.put(tpl, response.data);
           }, handleError);
 
         function handleError(resp) {

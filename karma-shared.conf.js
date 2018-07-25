@@ -62,17 +62,17 @@ module.exports = function(config, specificOptions) {
         browserName: 'firefox',
         version: 'latest-1'
       },
-      'SL_Safari_8': {
+      'SL_Safari-1': {
         base: 'SauceLabs',
         browserName: 'safari',
-        platform: 'OS X 10.10',
-        version: '8'
+        platform: 'OS X 10.12',
+        version: 'latest-1'
       },
-      'SL_Safari_9': {
+      'SL_Safari': {
         base: 'SauceLabs',
         browserName: 'safari',
-        platform: 'OS X 10.11',
-        version: '9'
+        platform: 'OS X 10.12',
+        version: 'latest'
       },
       'SL_IE_9': {
         base: 'SauceLabs',
@@ -104,11 +104,17 @@ module.exports = function(config, specificOptions) {
         platform: 'Windows 10',
         version: 'latest-1'
       },
-      'SL_iOS': {
+      'SL_iOS_10': {
         base: 'SauceLabs',
         browserName: 'iphone',
-        platform: 'OS X 10.10',
-        version: '8.1'
+        platform: 'OS X 10.12',
+        version: '10.3'
+      },
+      'SL_iOS_11': {
+        base: 'SauceLabs',
+        browserName: 'iphone',
+        platform: 'OS X 10.12',
+        version: '11.2'
       },
 
       'BS_Chrome': {
@@ -156,23 +162,17 @@ module.exports = function(config, specificOptions) {
         os: 'Windows',
         os_version: '10'
       },
-      'BS_iOS_8': {
-        base: 'BrowserStack',
-        device: 'iPhone 6',
-        os: 'ios',
-        os_version: '8.3'
-      },
-      'BS_iOS_9': {
-        base: 'BrowserStack',
-        device: 'iPhone 6S',
-        os: 'ios',
-        os_version: '9.3'
-      },
       'BS_iOS_10': {
         base: 'BrowserStack',
         device: 'iPhone 7',
         os: 'ios',
         os_version: '10.0'
+      },
+      'BS_iOS_11': {
+        base: 'BrowserStack',
+        device: 'iPhone 8',
+        os: 'ios',
+        os_version: '11.0'
       }
     }
   });
@@ -181,7 +181,6 @@ module.exports = function(config, specificOptions) {
   if (process.env.TRAVIS) {
     var buildLabel = 'TRAVIS #' + process.env.TRAVIS_BUILD_NUMBER + ' (' + process.env.TRAVIS_BUILD_ID + ')';
 
-    config.logLevel = config.LOG_DEBUG;
     // Karma (with socket.io 1.x) buffers by 50 and 50 tests can take a long time on IEs;-)
     config.browserNoActivityTimeout = 120000;
 
